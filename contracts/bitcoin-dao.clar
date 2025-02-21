@@ -146,3 +146,80 @@
         (ok true)
     )
 )
+
+;; Delegation Functions
+(define-public (delegate-votes (delegate-to principal) (amount uint) (expiry uint))
+    (let
+        (
+            (caller tx-sender)
+            (member-info (unwrap! (get-member-info caller) ERR-NOT-AUTHORIZED))
+        )
+        (asserts! (not (is-eq delegate-to caller)) ERR-INVALID-DELEGATE)
+        (asserts! (is-some (get-member-info delegate-to)) ERR-INVALID-DELEGATE)
+        (asserts! (>= (get voting-power member-info) amount) ERR-INSUFFICIENT-FUNDS)
+        (asserts! (>= expiry stacks-block-height) ERR-INVALID-PARAMETER)
+        
+        (map-set delegations
+            caller
+            {
+                delegate: delegate-to,
+                amount: amount,
+                expiry: expiry
+            }
+        )
+        
+        (map-set members
+            caller
+            (merge member-info {
+                voting-power: (- (get voting-power member-info) amount)
+            })
+        )
+        (ok true)
+    )
+)
+
+;; Proposal Functions
+(define-public (create-proposal 
+    (title (string-ascii 100))
+    (description (string-utf8 1000))
+    (amount uint)
+    (target principal))
+    (let
+        (
+            (caller tx-sender)
+            (current-block-height stacks-block-height)
+            (proposal-id (+ (var-get proposal-count) u1))
+            (params (var-get dao-parameters))
+            (end-block (+ current-block-height (get voting-period params)))
+        )
+        (asserts! (not (is-eq target (as-contract tx-sender))) ERR-INVALID-PARAMETER)
+        (asserts! (> (len title) u0) ERR-INVALID-PARAMETER)
+        (asserts! (> (len description) u0) ERR-INVALID-PARAMETER)
+        (asserts! (is-some (get-member-info caller)) ERR-NOT-AUTHORIZED)
+        (asserts! (>= (var-get treasury-balance) amount) ERR-INSUFFICIENT-FUNDS)
+        (asserts! (>= amount (get min-proposal-amount params)) ERR-INVALID-AMOUNT)
+        (asserts! (<= amount (get max-proposal-amount params)) ERR-INVALID-AMOUNT)
+        
+        (try! (stx-transfer? (get proposal-fee params) caller (as-contract tx-sender)))
+        
+        (map-set proposals 
+            proposal-id
+            {
+                id: proposal-id,
+                proposer: caller,
+                title: title,
+                description: description,
+                amount: amount,
+                target: target,
+                start-block: (+ current-block-height (get voting-delay params)),
+                end-block: end-block,
+                yes-votes: u0,
+                no-votes: u0,
+                status: "active",
+                executed: false
+            }
+        )
+        (var-set proposal-count proposal-id)
+        (ok proposal-id)
+    )
+)
