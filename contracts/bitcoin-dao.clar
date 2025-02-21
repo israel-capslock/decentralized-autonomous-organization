@@ -69,3 +69,80 @@
         last-withdrawal: uint
     }
 )
+
+
+(define-map proposals 
+    uint 
+    {
+        id: uint,
+        proposer: principal,
+        title: (string-ascii 100),
+        description: (string-utf8 1000),
+        amount: uint,
+        target: principal,
+        start-block: uint,
+        end-block: uint,
+        yes-votes: uint,
+        no-votes: uint,
+        status: (string-ascii 20),
+        executed: bool
+    }
+)
+
+(define-map votes 
+    {proposal-id: uint, voter: principal} 
+    {
+        amount: uint,
+        support: bool
+    }
+)
+
+(define-map emergency-admins principal bool)
+
+(define-map delegations
+    principal
+    {
+        delegate: principal,
+        amount: uint,
+        expiry: uint
+    }
+)
+
+(define-map return-pools
+    uint
+    {
+        total-amount: uint,
+        distributed-amount: uint,
+        distribution-start: uint,
+        distribution-end: uint,
+        claims: (list 200 principal)
+    }
+)
+
+(define-map member-claims
+    {member: principal, pool-id: uint}
+    {
+        amount: uint,
+        claimed: bool
+    }
+)
+
+;; Public Functions
+
+;; Emergency Control Functions
+(define-public (set-emergency-state (state bool))
+    (begin
+        (asserts! (is-emergency-admin tx-sender) ERR-NOT-AUTHORIZED)
+        (var-set emergency-state state)
+        (ok true)
+    )
+)
+
+(define-public (add-emergency-admin (admin principal))
+    (begin
+        (asserts! (is-eq tx-sender (var-get dao-admin)) ERR-NOT-AUTHORIZED)
+        (asserts! (not (is-eq admin tx-sender)) ERR-INVALID-PARAMETER)
+        (map-set emergency-admins admin true)
+        (ok true)
+    )
+)
