@@ -70,7 +70,6 @@
     }
 )
 
-
 (define-map proposals 
     uint 
     {
@@ -300,5 +299,76 @@
         (asserts! (validate-parameters new-params) ERR-INVALID-PARAMETER)
         (var-set dao-parameters new-params)
         (ok true)
+    )
+)
+
+;; Read-Only Functions
+(define-read-only (get-member-info (member principal))
+    (map-get? members member)
+)
+
+(define-read-only (get-proposal-by-id (proposal-id uint))
+    (map-get? proposals proposal-id)
+)
+
+(define-read-only (get-vote (proposal-id uint) (voter principal))
+    (map-get? votes {proposal-id: proposal-id, voter: voter})
+)
+
+(define-read-only (get-delegation (member principal))
+    (map-get? delegations member)
+)
+
+(define-read-only (get-return-pool (pool-id uint))
+    (map-get? return-pools pool-id)
+)
+
+(define-read-only (has-claimed (member principal) (pool-id uint))
+    (default-to false (get claimed (map-get? member-claims {member: member, pool-id: pool-id})))
+)
+
+(define-read-only (is-emergency-admin (admin principal))
+    (default-to false (map-get? emergency-admins admin))
+)
+
+(define-read-only (get-dao-parameters)
+    (ok (var-get dao-parameters))
+)
+
+(define-read-only (get-treasury-balance)
+    (ok (var-get treasury-balance))
+)
+
+;; Private Functions
+(define-private (calculate-member-share (member principal) (pool-id uint))
+    (let
+        (
+            (pool (unwrap! (get-return-pool pool-id) u0))
+            (member-info (unwrap! (get-member-info member) u0))
+            (total-shares (var-get treasury-balance))
+        )
+        (if (> total-shares u0)
+            (/ (* (get total-amount pool) (get voting-power member-info)) total-shares)
+            u0
+        )
+    )
+)
+
+(define-private (validate-parameters (params {
+    proposal-fee: uint,
+    min-proposal-amount: uint,
+    max-proposal-amount: uint,
+    voting-delay: uint,
+    voting-period: uint,
+    timelock-period: uint,
+    quorum-threshold: uint,
+    super-majority: uint
+}))
+    (and
+        (< (get min-proposal-amount params) (get max-proposal-amount params))
+        (<= (get quorum-threshold params) u1000)
+        (<= (get super-majority params) u1000)
+        (<= (get super-majority params) u1000)
+        (> (get voting-period params) (get voting-delay params))
     )
 )
